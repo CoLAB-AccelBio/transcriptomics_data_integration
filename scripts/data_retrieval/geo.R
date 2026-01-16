@@ -159,7 +159,7 @@ if(length(gse_eset) == 1) {
        
 ##### Remove the compressed raw data file
 if(FileType=="raw") {
-    rawFile2rm=paste("rm", paste(GEO,"RAW.tar", sep="_"), sep=" ")
-system(rawFile2rm)
+  rawFile2rm=paste("rm", paste(GEO,"RAW.tar", sep="_"), sep=" ")
+  system(rawFile2rm)
 }
 
