@@ -61,7 +61,9 @@ replace0s <- function (lumiBatch) {
 		exprs.ordered <- sort(exprs(lumiBatch)[,i])
 		exprs.ordered <- exprs.ordered[ exprs.ordered != 0 ]
         
-		exprs(lumiBatch)[exprs(lumiBatch)[,i]==0] <- exprs.ordered[1]
+		if ( !all(exprs(lumiBatch)[,i] > 0) ) {
+		  exprs(lumiBatch)[exprs(lumiBatch)[,i]==0] <- exprs.ordered[1]
+		}
 	}
 	return(lumiBatch)
 }
@@ -86,7 +88,7 @@ getDatasetsColours <- function(datasets) {
 #===============================================================================
 
 library(lumi)
-library(simpleaffy)
+#library(simpleaffy)
 library(sva)
 
 source("MultiGene2ProbeFilter.R")
@@ -135,52 +137,66 @@ if ( nrow(DatasetInput) > 1 ) {
     }
 }
 
-datasetList <- as.list(unique(targetFile[,"FileName"]))
+# datasetList <- as.list(unique(targetFile[,"FileName"]))
+# 
+# if ( length(datasetList) > 1 ) {
+# 
+#     datasets <- bindDatasets(datasetList)
+#     cat("Combining datasets produced using Illumina HumanHT-12 v3.0 Expression Beadchip ...\n")
+#     cat("Writing bound expression data into a file.\n")
+#     write.table(prepare2write(datasets), file="Illum_HT_12_V3_exprs_matrix.txt",sep="\t", row.names=FALSE, col.names = FALSE)
+#     
+#     cat("Loading bound expression data into LumiBatch object\n")
+#     dat <- lumiR("Illum_HT_12_V3_exprs_matrix.txt", sep = NULL, detectionTh = 0.01, na.rm = TRUE, lib = NULL)
+#     
+# } else {
+#     cat("Loading dataset produced using Illumina HumanHT-12 V3.0 Expression Beadchip into LumiBatch object...\n")
+#     
+#     dat <- lumiR(datasetList[[1]], sep = NULL, detectionTh = 0.01, na.rm = TRUE, lib = NULL)
+# }
+# 
+# ##### Remove samples identified as outliers
+# studyIDs <- rownames(DatasetInput)
+# 
+# sampleNames(dat) <- rownames(targetFile)
+# dat@phenoData$sampleID <- rownames(targetFile)
+# 
+# 
+# outlierList <- NULL
+# j<-1
+# for (i in 1:length(studyIDs)) {
+# 	outliersInfo = read.table(paste(ProjectDir,"/outliers_", studyIDs[i],".txt",sep=""),sep="\t",as.is=TRUE,header=TRUE,row.names=1)
+# 	
+# 	if ( !is.na(outliersInfo[,2]) ) {
+# 		outliers =unlist(strsplit(outliersInfo[,2], split=',', fixed=TRUE))
+# 		for (k in 1:length(outliers)) {
+# 			cat(paste("Removing sample:", outliers[k], "\n", sep=" "))
+# 			outlierList[j] <- outliers[k]
+# 			j<-j+1
+# 		}
+# 	}
+# }
+# dat <- get.array.subset(dat,"sampleID",setdiff(sampleNames(dat),as.vector(as.list(outlierList))))
+# 
+# targetFile <- targetFile[setdiff(rownames(targetFile),as.vector(as.list(outlierList))),]
 
-if ( length(datasetList) > 1 ) {
-
-    datasets <- bindDatasets(datasetList)
-    cat("Combining datasets produced using Illumina HumanHT-12 v3.0 Expression Beadchip ...\n")
-    cat("Writing bound expression data into a file.\n")
-    write.table(prepare2write(datasets), file="Illum_HT_12_V3_exprs_matrix.txt",sep="\t", row.names=FALSE, col.names = FALSE)
-    
-    cat("Loading bound expression data into LumiBatch object\n")
-    dat <- lumiR("Illum_HT_12_V3_exprs_matrix.txt", sep = NULL, detectionTh = 0.01, na.rm = TRUE, lib = NULL)
-    
-} else {
-    cat("Loading dataset produced using Illumina HumanHT-12 V3.0 Expression Beadchip into LumiBatch object...\n")
-    
-    dat <- lumiR(datasetList[[1]], sep = NULL, detectionTh = 0.01, na.rm = TRUE, lib = NULL)
-}
-
-##### Remove samples identified as outliers
-studyIDs <- rownames(DatasetInput)
-
-sampleNames(dat) <- rownames(targetFile)
-dat@phenoData$sampleID <- rownames(targetFile)
 
 
-outlierList <- NULL
-j<-1
-for (i in 1:length(studyIDs)) {
-	outliersInfo = read.table(paste(ProjectDir,"/outliers_", studyIDs[i],".txt",sep=""),sep="\t",as.is=TRUE,header=TRUE,row.names=1)
-	
-	if ( !is.na(outliersInfo[,2]) ) {
-		outliers =unlist(strsplit(outliersInfo[,2], split=',', fixed=TRUE))
-		for (k in 1:length(outliers)) {
-			cat(paste("Removing sample:", outliers[k], "\n", sep=" "))
-			outlierList[j] <- outliers[k]
-			j<-j+1
-		}
-	}
-}
-dat <- get.array.subset(dat,"sampleID",setdiff(sampleNames(dat),as.vector(as.list(outlierList))))
 
-targetFile <- targetFile[setdiff(rownames(targetFile),as.vector(as.list(outlierList))),]
 
+expr_matrix=as.matrix(read.table(paste(ProjectDir,"normalised.txt",sep="/"),sep="\t",as.is=TRUE,header=TRUE,row.names=1))
 
 ##### Keep only reliable probes based on cigar strings derived from Ensembl microarray probe mapping
 Illum_HT_12_V3_probes <- read.table(probesFlatFile,sep="\t",as.is=TRUE,header=TRUE,row.names=1)
+
+##### Convert matrix to ExpressionSet object
+dat <- ExpressionSet(assayData = expr_matrix)
+
+##### Add the gene metadata (feature data) to the lumi object
+phenoData(dat) <- AnnotatedDataFrame(targetFile)
+
+#####  View the structure of the ExpressionSet object
+summary(dat)
 
 dat <- dat[featureNames(dat) %in% rownames(Illum_HT_12_V3_probes), ]
 

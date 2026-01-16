@@ -45,8 +45,10 @@ replace0s <- function (lumiBatch) {
 		
 		exprs.ordered <- sort(exprs(lumiBatch)[,i])
 		exprs.ordered <- exprs.ordered[ exprs.ordered != 0 ]
-				
-		exprs(lumiBatch)[exprs(lumiBatch)[,i]==0] <- exprs.ordered[1]
+		
+		if ( !all(exprs(lumiBatch)[,i] > 0) ) {
+		  exprs(lumiBatch)[exprs(lumiBatch)[,i]==0] <- exprs.ordered[1]
+		}
 	}	
 	return(lumiBatch)
 }
@@ -114,28 +116,41 @@ setwd(QCdir)
 #    Load expression data
 #===============================================================================
 
-target <- as.data.frame(read.table(paste(dataDir,targetFile,sep="/"),sep="\t",as.is=TRUE,header=TRUE))
-fileName = paste(dataDir, target[1,"FileName"], sep="/")
+targetFile <- as.data.frame(read.table(paste(dataDir,targetFile,sep="/"),sep="\t",as.is=TRUE,header=TRUE,row.names=1))
 
-target <- as.data.frame(read.table(paste(dataDir,targetFile,sep="/"),sep="\t",as.is=TRUE,header=TRUE)[,"Target"])
+# fileName = paste(dataDir, target[1,"FileName"], sep="/")
+# 
+# target <- as.data.frame(read.table(paste(dataDir,targetFile,sep="/"),sep="\t",as.is=TRUE,header=TRUE)[,"Target"])
+# 
+# lumiData = lumiR( fileName, sep = "\t", detectionTh = 0.01, na.rm = TRUE, lib = NULL)
 
-lumiData = lumiR( fileName, sep = "\t", detectionTh = 0.01, na.rm = TRUE, lib = NULL)
+expr_matrix=as.matrix(read.table(paste(ProjectDir,"normalised.txt",sep="/"),sep="\t",as.is=TRUE,header=TRUE,row.names=1))
 
-rownames(target) <- read.table(paste(dataDir,targetFile,sep="/"),sep="\t",as.is=TRUE,header=TRUE)[,"Name"]
-colnames(target) <- "Target"
-sampleNames(lumiData) <- rownames(target)
+##### Convert matrix to ExpressionSet object
+lumiData <- ExpressionSet(assayData = expr_matrix)
 
-data <- new("ExpressionSet", exprs = exprs(lumiData), phenoData = new("AnnotatedDataFrame", data=target) )
+##### Add the gene metadata (feature data) to the lumi object
+phenoData(lumiData) <- AnnotatedDataFrame(targetFile)
+
+#####  View the structure of the ExpressionSet object
+summary(lumiData)
+
+# rownames(target) <- read.table(paste(dataDir,targetFile,sep="/"),sep="\t",as.is=TRUE,header=TRUE)[,"Sample_name"]
+# colnames(target) <- "Target"
+# sampleNames(lumiData) <- rownames(target)
+
+# data <- new("ExpressionSet", exprs = exprs(lumiData), phenoData = new("AnnotatedDataFrame", data=targetFile) )
+data <- lumiData
 
 #===============================================================================
 #    Data quality control using arrayQualityMetrics package
 #===============================================================================
 
-##### Basic data quality using lumi package
-QCsummary <- lumiData@QC$sampleSummary
-
-##### Write QC summary
-write.table(prepare2write(QCsummary), file="QC_summary.txt",sep="\t", row.names=FALSE)
+# ##### Basic data quality using lumi package
+# QCsummary <- lumiData@QC$sampleSummary
+# 
+# ##### Write QC summary
+# write.table(prepare2write(QCsummary), file="QC_summary.txt",sep="\t", row.names=FALSE)
 
 ##### Customise arrayQualityMetrics reports
 preparedData = prepdata(expressionset = data, intgroup = "Target", do.logtransform = TRUE)
@@ -152,20 +167,20 @@ qm = list("Heatmap"=QCheatmap, "PCA"=QCpca, "Boxplot"=QCboxplot, "Density"=QCden
 aqm.writereport(modules = qm, reporttitle = paste("arrayQualityMetrics report for", studyID, sep=" "), outdir = QCdir, arrayTable = pData(data))
 
 
-##### multivariate outlier detection
-library(arrayMvout)
-ii = ArrayOutliers(lumiData, alpha = 0.001, pc2use=1:3)
-
-write.table(prepare2write(ii[[1]]),"outliers.txt",sep="\t", row.names=FALSE)
-
-##### Report detected outliers in the project workspace
-samples2exclude = data.frame(c(studyID, dataDir, paste(rownames(ii[[1]]), collapse = ',')))
-
-write.table( t(samples2exclude), paste(ProjectDir,"/outliers_", studyID, ".txt", sep = ""), row.names = FALSE, col.names = c("DatasetName", "DataDir", "Samples2exclude"),  quote = FALSE, sep="\t" )
-
-pdf("outliers.pdf", pointsize = 6)
-plot(ii, choices = c(1, 3))
-dev.off()
+# ##### multivariate outlier detection
+# library(arrayMvout)
+# ii = ArrayOutliers(lumiData, alpha = 0.001, pc2use=1:3)
+# 
+# write.table(prepare2write(ii[[1]]),"outliers.txt",sep="\t", row.names=FALSE)
+# 
+# ##### Report detected outliers in the project workspace
+# samples2exclude = data.frame(c(studyID, dataDir, paste(rownames(ii[[1]]), collapse = ',')))
+# 
+# write.table( t(samples2exclude), paste(ProjectDir,"/outliers_", studyID, ".txt", sep = ""), row.names = FALSE, col.names = c("DatasetName", "DataDir", "Samples2exclude"),  quote = FALSE, sep="\t" )
+# 
+# pdf("outliers.pdf", pointsize = 6)
+# plot(ii, choices = c(1, 3))
+# dev.off()
  
 #===============================================================================
 #    Normalisation with Robust Spline Normalization (RSN)
@@ -186,10 +201,10 @@ data.N <- lumiN(data, method='rsn')
 
 data.N.Q <- lumiQ(data.N)
 
-QCsummary <- data.N.Q@QC$sampleSummary
-
-##### Write QC summary
-write.table(prepare2write(QCsummary), file="QC_summary.rsn.txt",sep="\t", row.names=FALSE)
+# QCsummary <- data.N.Q@QC$sampleSummary
+# 
+# ##### Write QC summary
+# write.table(prepare2write(QCsummary), file="QC_summary.rsn.txt",sep="\t", row.names=FALSE)
 
 ##### signal intensity before and after RSN normalisation
 pdf("density.rsn.pdf")
